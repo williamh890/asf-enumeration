@@ -11,7 +11,7 @@ import shapely
 SEARCH_API_URL = 'https://api-prod-private.asf.alaska.edu/services/search/param'
 
 
-@dataclass
+@dataclass(frozen=True)
 class AriaFrame:
     frame_id: int
     path: int
@@ -29,21 +29,20 @@ class AriaFrame:
 def _load_aria_frames_by_id() -> dict[int, AriaFrame]:
     frames_by_id = {}
 
-    for direction in ['ascending', 'descending']:
-        with importlib.resources.path('asf_enumeration.aria_frames', f'{direction}.geojson') as frame_file:
-            frames = json.loads(frame_file.read_text())
+    with importlib.resources.path('asf_enumeration.aria_frames', 'frames.geojson') as frame_file:
+        frames = json.loads(frame_file.read_text())
 
-        for frame in frames['features']:
-            props = frame['properties']
+    for frame in frames['features']:
+        props = frame['properties']
 
-            aria_frame = AriaFrame(
-                frame_id=props['id'],
-                path=props['path'],
-                flight_direction=props['dir'],
-                polygon=shapely.Polygon(frame['geometry']['coordinates'][0]),
-            )
+        aria_frame = AriaFrame(
+            frame_id=props['id'],
+            path=props['path'],
+            flight_direction=props['dir'],
+            polygon=shapely.Polygon(frame['geometry']['coordinates'][0]),
+        )
 
-            frames_by_id[aria_frame.frame_id] = aria_frame
+        frames_by_id[aria_frame.frame_id] = aria_frame
 
     return frames_by_id
 
