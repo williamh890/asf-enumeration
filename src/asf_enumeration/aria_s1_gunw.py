@@ -1,7 +1,13 @@
 import datetime
 import importlib.resources
 import json
+from collections import defaultdict
 from dataclasses import dataclass
+
+import requests
+
+
+SEARCH_API_URL = 'https://api-prod-private.asf.alaska.edu/services/search/param'
 
 
 @dataclass
@@ -9,44 +15,96 @@ class AriaFrame:
     frame_id: int
     path: int
     flight_direction: str
-    polygon: str
+    geometry: dict
 
     def does_intersect(self, polygon) -> bool:
         # TODO: check intersection
         return True
 
+    @property
+    def wkt(self) -> str:
+        coordinates = ','.join(' '.join(str(coord) for coord in point) for point in self.geometry['coordinates'][0])
+        return f'POLYGON(({coordinates}))'
 
-def get_frames(polygon: str = None, flight_direction: str = None, path: int = None) -> list[AriaFrame]:
-    flight_directions = ['ascending', 'descending'] if flight_direction is None else [flight_direction]
-    aria_frames = []
 
-    for direction in flight_directions:
-        with importlib.resources.path('asf_enumeration.aria_frames', f'{direction.lower()}.geojson') as frame_file:
+def _load_aria_frames_by_id() -> dict[int, AriaFrame]:
+    frames_by_id = {}
+
+    for direction in ['ascending', 'descending']:
+        with importlib.resources.path('asf_enumeration.aria_frames', f'{direction}.geojson') as frame_file:
             frames = json.loads(frame_file.read_text())
 
         for frame in frames['features']:
             props = frame['properties']
 
-            if path and path != props['path']:
-                continue
-
             aria_frame = AriaFrame(
                 frame_id=props['id'],
                 path=props['path'],
                 flight_direction=props['dir'],
-                polygon=frame['geometry']['type']
+                geometry=frame['geometry']
             )
 
-            if polygon and not aria_frame.does_intersects(polygon):
-                continue
+            frames_by_id[aria_frame.frame_id] = aria_frame
 
-            aria_frames.append(aria_frame)
+    return frames_by_id
+
+
+FRAMES_BY_ID = _load_aria_frames_by_id()
+
+
+def get_frames(polygon: str = None, flight_direction: str = None, path: int = None) -> list[AriaFrame]:
+    aria_frames = []
+
+    for frame in FRAMES_BY_ID.values():
+        if flight_direction and flight_direction.upper() != frame.flight_direction:
+            continue
+
+        if path and path != frame.path:
+            continue
+
+        if polygon and not frame.does_intersects(polygon):
+            continue
+
+        aria_frames.append(frame)
 
     return aria_frames
 
 
+def get_frame(frame_id: int) -> AriaFrame:
+    return FRAMES_BY_ID[frame_id]
+
+
 def get_stack(frame_id: int) -> list[datetime.date]:
-    pass
+    granules = _get_granules_for_frame(frame_id)
+    stack_dates = _get_stack_dates_from(granules)
+    stack_dates.sort()
+    return stack_dates
+
+
+def _get_granules_for_frame(frame_id: int) -> list[dict]:
+    frame = get_frame(frame_id)
+
+    params = {
+        'dataset': 'SENTINEL-1',
+        'processingLevel': 'SLC',
+        'beamMode': 'IW',
+        'polarization': 'VV,VV+VH',
+        'flightDirection': frame.flight_direction,
+        'relativeOrbit': frame.path,
+        'intersectsWith': frame.wkt,
+        'output': 'jsonlite2',
+    }
+    response = requests.get(SEARCH_API_URL, params=params)
+    response.raise_for_status()
+    return response.json()['results']
+
+
+def _get_stack_dates_from(granules: list[dict]) -> list[datetime.date]:
+    groups = defaultdict(list)
+    for granule in granules:
+        group_id = granule['d'] + '_' + granule['o'][0]
+        groups[group_id].append(granule)
+    return [min(datetime.datetime.fromisoformat(g['st']).date() for g in group) for group in groups.values()]
 
 
 def get_slcs(frame_id: int, date: datetime.date) -> list[str]:
