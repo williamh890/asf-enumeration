@@ -109,7 +109,11 @@ def _get_stack_dates_from(granules: list[dict]) -> list[datetime.date]:
     for granule in granules:
         group_id = granule['d'] + '_' + granule['o'][0]
         groups[group_id].append(granule)
-    granule_dates = [min(datetime.datetime.fromisoformat(g['st']).date() for g in group) for group in groups.values()]
+
+    def _get_date_from_group(group: str) -> datetime.date:
+        return min(datetime.datetime.fromisoformat(granule['st']).date() for granule in group)
+
+    granule_dates = [_get_date_from_group(group) for group in groups.values()]
     return granule_dates
 
 
@@ -120,12 +124,13 @@ def get_slcs(frame_id: int, date: datetime.date) -> list[str]:
 
 
 def does_product_exist(frame_id: int, reference_date: datetime.date, secondary_date: datetime.date) -> bool:
+    date_buffer = datetime.timedelta(days=1)
     params = {
         'dataset': 'ARIA S1 GUNW',
         'frame': frame_id,
         'output': 'jsonlite2',
-        'start': (reference_date - datetime.timedelta(days=1)).isoformat(),
-        'end': (reference_date + datetime.timedelta(days=1)).isoformat()
+        'start': (reference_date - date_buffer).isoformat(),
+        'end': (reference_date + date_buffer).isoformat()
     }
 
     response = requests.get(SEARCH_API_URL, params=params)
@@ -136,8 +141,9 @@ def does_product_exist(frame_id: int, reference_date: datetime.date, secondary_d
 
 
 def _dates_match(granule: str, reference: datetime.date, secondary: datetime.date) -> bool:
+    date_strs = granule.split('-')[6].split('_')
     granule_reference, granule_secondary = [
-        datetime.datetime.strptime(date_str, '%Y%m%d').date() for date_str in granule.split('-')[6].split('_')
+        datetime.datetime.strptime(date_str, '%Y%m%d').date() for date_str in date_strs
     ]
 
     return granule_reference == reference and granule_secondary == secondary
