@@ -1,3 +1,6 @@
+from datetime import date
+import json
+
 import pytest
 
 from asf_enumeration import aria_s1_gunw
@@ -32,5 +35,11 @@ def test_get_frames_by_flight_direction():
 @pytest.mark.network
 def test_get_stack():
     stack = aria_s1_gunw.get_stack(200)
-
     assert len(stack) > 0
+
+
+@pytest.mark.network
+def test_get_slcs():
+    slcs = aria_s1_gunw.get_slcs(200, date(2025, 5, 28))
+
+    assert slcs

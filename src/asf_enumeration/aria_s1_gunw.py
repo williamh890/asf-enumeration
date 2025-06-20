@@ -81,7 +81,7 @@ def get_stack(frame_id: int) -> list[datetime.date]:
     return stack_dates
 
 
-def _get_granules_for_frame(frame_id: int) -> list[dict]:
+def _get_granules_for_frame(frame_id: int, date: datetime.date = None) -> list[dict]:
     frame = get_frame(frame_id)
 
     params = {
@@ -94,6 +94,11 @@ def _get_granules_for_frame(frame_id: int) -> list[dict]:
         'intersectsWith': frame.wkt,
         'output': 'jsonlite2',
     }
+
+    if date:
+        params['start'] = date.isoformat()
+        params['end'] = (date + datetime.timedelta(days=1)).isoformat()
+
     response = requests.get(SEARCH_API_URL, params=params)
     response.raise_for_status()
     return response.json()['results']
@@ -104,11 +109,14 @@ def _get_stack_dates_from(granules: list[dict]) -> list[datetime.date]:
     for granule in granules:
         group_id = granule['d'] + '_' + granule['o'][0]
         groups[group_id].append(granule)
-    return [min(datetime.datetime.fromisoformat(g['st']).date() for g in group) for group in groups.values()]
+    granule_dates = [min(datetime.datetime.fromisoformat(g['st']).date() for g in group) for group in groups.values()]
+    return granule_dates
 
 
 def get_slcs(frame_id: int, date: datetime.date) -> list[str]:
-    pass
+    slcs = _get_granules_for_frame(frame_id, date)
+
+    return slcs
 
 
 def does_product_exist(frame_id: int, reference_date: datetime.date, secondary_date: datetime.date) -> bool:
