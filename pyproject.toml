@@ -23,7 +23,7 @@ classifiers=[
 ]
 dependencies = [
     "requests",
-    "urllib3",
+    "shapely"
 ]
 dynamic = ["version"]
 
@@ -31,7 +31,6 @@ dynamic = ["version"]
 develop = [
     "pytest",
     "pytest-cov",
-    "responses"
 ]
 
 [project.urls]

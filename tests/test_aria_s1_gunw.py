@@ -1,14 +1,26 @@
 from datetime import date
 
 import pytest
+import shapely
 
 from asf_enumeration import aria_s1_gunw
 
 
-def test_all_get_frames():
-    frames = aria_s1_gunw.get_frames()
+def test_get_frames():
+    wkt = 'POLYGON((-128.0401 57.1054,-127.7544 57.1054,-127.7544 57.2034,-128.0401 57.2034,-128.0401 57.1054))'
+    search_polygon = shapely.from_wkt(wkt)
 
+    frames = aria_s1_gunw.get_frames()
     assert len(frames) == 27398
+
+    frames = aria_s1_gunw.get_frames(polygon=search_polygon)
+    assert len(frames) == 8
+
+    ascending = aria_s1_gunw.get_frames(polygon=search_polygon, flight_direction='ASCENDING')
+    assert len(ascending) == 4
+
+    all_filters = aria_s1_gunw.get_frames(polygon=search_polygon, flight_direction='ASCENDING', path=35)
+    assert len(all_filters) == 2
 
 
 def test_aria_frame_wkt():
@@ -56,11 +68,11 @@ def test_dates_match():
     assert aria_s1_gunw._dates_match(
         'S1-GUNW-D-R-163-tops-20250527_20250503-212910-00121E_00010S-PP-07c7-v3_0_1',
         date(2025, 5, 27),
-        date(2025, 5, 3)
+        date(2025, 5, 3),
     )
 
     assert not aria_s1_gunw._dates_match(
         'S1-GUNW-D-R-163-tops-20250527_20250503-212910-00121E_00010S-PP-07c7-v3_0_1',
         date(2024, 5, 27),
-        date(2024, 5, 3)
+        date(2024, 5, 3),
     )

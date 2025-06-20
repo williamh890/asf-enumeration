@@ -5,6 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 import requests
+import shapely
 
 
 SEARCH_API_URL = 'https://api-prod-private.asf.alaska.edu/services/search/param'
@@ -15,16 +16,14 @@ class AriaFrame:
     frame_id: int
     path: int
     flight_direction: str
-    geometry: dict
+    polygon: shapely.Polygon
 
-    def does_intersect(self, polygon) -> bool:
-        # TODO: check intersection
-        return True
+    def does_intersect(self, polygon: shapely.Polygon) -> bool:
+        return shapely.intersects(self.polygon, polygon)
 
     @property
     def wkt(self) -> str:
-        coordinates = ','.join(' '.join(str(coord) for coord in point) for point in self.geometry['coordinates'][0])
-        return f'POLYGON(({coordinates}))'
+        return shapely.to_wkt(self.polygon)
 
 
 def _load_aria_frames_by_id() -> dict[int, AriaFrame]:
@@ -41,7 +40,7 @@ def _load_aria_frames_by_id() -> dict[int, AriaFrame]:
                 frame_id=props['id'],
                 path=props['path'],
                 flight_direction=props['dir'],
-                geometry=frame['geometry']
+                polygon=shapely.Polygon(frame['geometry']['coordinates'][0]),
             )
 
             frames_by_id[aria_frame.frame_id] = aria_frame
@@ -52,7 +51,9 @@ def _load_aria_frames_by_id() -> dict[int, AriaFrame]:
 FRAMES_BY_ID = _load_aria_frames_by_id()
 
 
-def get_frames(polygon: str = None, flight_direction: str = None, path: int = None) -> list[AriaFrame]:
+def get_frames(
+    polygon: shapely.Polygon | None = None, flight_direction: str | None = None, path: int | None = None
+) -> list[AriaFrame]:
     aria_frames = []
 
     for frame in FRAMES_BY_ID.values():
@@ -62,7 +63,7 @@ def get_frames(polygon: str = None, flight_direction: str = None, path: int = No
         if path and path != frame.path:
             continue
 
-        if polygon and not frame.does_intersects(polygon):
+        if polygon and not frame.does_intersect(polygon):
             continue
 
         aria_frames.append(frame)
@@ -130,7 +131,7 @@ def does_product_exist(frame_id: int, reference_date: datetime.date, secondary_d
         'frame': frame_id,
         'output': 'jsonlite2',
         'start': (reference_date - date_buffer).isoformat(),
-        'end': (reference_date + date_buffer).isoformat()
+        'end': (reference_date + date_buffer).isoformat(),
     }
 
     response = requests.get(SEARCH_API_URL, params=params)
