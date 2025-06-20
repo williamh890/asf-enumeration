@@ -55,6 +55,11 @@ src = ["src", "tests"]
 indent-style = "space"
 quote-style = "single"
 
+[tool.pytest.ini_options]
+markers = [
+    "network",
+]
+
 [tool.ruff.lint]
 extend-select = [
     "I",   # isort: https://docs.astral.sh/ruff/rules/#isort-i

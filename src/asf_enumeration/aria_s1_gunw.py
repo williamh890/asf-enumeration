@@ -120,4 +120,24 @@ def get_slcs(frame_id: int, date: datetime.date) -> list[str]:
 
 
 def does_product_exist(frame_id: int, reference_date: datetime.date, secondary_date: datetime.date) -> bool:
-    pass
+    params = {
+        'dataset': 'ARIA S1 GUNW',
+        'frame': frame_id,
+        'output': 'jsonlite2',
+        'start': (reference_date - datetime.timedelta(days=1)).isoformat(),
+        'end': (reference_date + datetime.timedelta(days=1)).isoformat()
+    }
+
+    response = requests.get(SEARCH_API_URL, params=params)
+    response.raise_for_status()
+    granules = [result['gn'] for result in response.json()['results']]
+
+    return any([_dates_match(g, reference_date, secondary_date) for g in granules])
+
+
+def _dates_match(granule: str, reference: datetime.date, secondary: datetime.date) -> bool:
+    granule_reference, granule_secondary = [
+        datetime.datetime.strptime(date_str, '%Y%m%d').date() for date_str in granule.split('-')[6].split('_')
+    ]
+
+    return granule_reference == reference and granule_secondary == secondary
