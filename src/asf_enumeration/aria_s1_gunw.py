@@ -23,6 +23,12 @@ class AriaFrame:
         return shapely.to_wkt(self.polygon)
 
 
+@dataclass(frozen=True)
+class AriaProductGroup:
+    date: datetime.date
+    products: list[asf.ASFProduct]
+
+
 def _load_aria_frames_by_id() -> dict[int, AriaFrame]:
     frames_by_id = {}
 
@@ -71,11 +77,11 @@ def get_frame(frame_id: int) -> AriaFrame:
     return FRAMES_BY_ID[frame_id]
 
 
-def get_stack(frame_id: int) -> list[datetime.date]:
+def get_stack(frame_id: int) -> list[AriaProductGroup]:
     granules = _get_granules_for_frame(frame_id)
-    stack_dates = _get_stack_dates_from(granules)
-    stack_dates.sort()
-    return stack_dates
+    stack = _get_stack_from(granules)
+    stack.sort(key=lambda group: group.date)
+    return stack
 
 
 def _get_granules_for_frame(frame_id: int, date: datetime.date = None) -> list[asf.ASFSearchResults]:
@@ -102,7 +108,7 @@ def _get_granules_for_frame(frame_id: int, date: datetime.date = None) -> list[a
     return results
 
 
-def _get_stack_dates_from(granules: asf.ASFSearchResults) -> list[datetime.date]:
+def _get_stack_from(granules: asf.ASFSearchResults) -> list[AriaProductGroup]:
     groups = defaultdict(list)
     for granule in granules:
         props = granule.properties
@@ -112,8 +118,12 @@ def _get_stack_dates_from(granules: asf.ASFSearchResults) -> list[datetime.date]
     def _get_date_from_group(group: str) -> datetime.date:
         return min(datetime.datetime.fromisoformat(granule.properties['startTime']).date() for granule in group)
 
-    granule_dates = [_get_date_from_group(group) for group in groups.values()]
-    return granule_dates
+    aria_groups = [AriaProductGroup(
+        date=_get_date_from_group(group),
+        products=[product for product in group]
+    ) for group in groups.values()]
+
+    return aria_groups
 
 
 def get_slcs(frame_id: int, date: datetime.date) -> list[str]:
