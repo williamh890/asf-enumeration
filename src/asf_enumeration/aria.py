@@ -126,7 +126,7 @@ def _get_stack_from(granules: asf.ASFSearchResults) -> list[AriaProductGroup]:
     return aria_groups
 
 
-def get_slcs(frame_id: int, date: datetime.date) -> list[str]:
+def get_slcs(frame_id: int, date: datetime.date) -> list[asf.ASFProduct]:
     slcs = _get_granules_for_frame(frame_id, date)
 
     return slcs

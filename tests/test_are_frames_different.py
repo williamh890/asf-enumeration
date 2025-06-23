@@ -5,7 +5,7 @@ from collections import defaultdict
 import pytest
 import shapely
 
-from asf_enumeration import aria_s1_gunw
+import asf_enumeration
 
 
 @pytest.mark.skip
@@ -20,7 +20,7 @@ def test_if_frames_are_different():
         for frame in frames['features']:
             props = frame['properties']
 
-            aria_frame = aria_s1_gunw.AriaFrame(
+            aria_frame = asf_enumeration.aria.AriaFrame(
                 frame_id=props['id'],
                 path=props['path'],
                 flight_direction=props['dir'],
