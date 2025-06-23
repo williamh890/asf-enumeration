@@ -55,9 +55,6 @@ def test_consolidate_frame_map():
             all_frames.append(frame)
 
     with open('./frames.geojson', 'w') as f:
-        json.dump({
-            'type': "FeatureCollection",
-            'features': all_frames
-        }, f)
+        json.dump({'type': 'FeatureCollection', 'features': all_frames}, f)
 
     print(len(all_frames))

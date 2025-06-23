@@ -4,11 +4,8 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass
 
-import requests
+import asf_search as asf
 import shapely
-
-
-SEARCH_API_URL = 'https://api-prod-private.asf.alaska.edu/services/search/param'
 
 
 @dataclass(frozen=True)
@@ -81,37 +78,39 @@ def get_stack(frame_id: int) -> list[datetime.date]:
     return stack_dates
 
 
-def _get_granules_for_frame(frame_id: int, date: datetime.date = None) -> list[dict]:
+def _get_granules_for_frame(frame_id: int, date: datetime.date = None) -> list[asf.ASFSearchResults]:
     frame = get_frame(frame_id)
 
-    params = {
-        'dataset': 'SENTINEL-1',
-        'processingLevel': 'SLC',
-        'beamMode': 'IW',
-        'polarization': 'VV,VV+VH',
+    search_params = {
+        'dataset': asf.constants.DATASET.SENTINEL1,
+        'platform': ['SA', 'SB'],
+        'processingLevel': asf.constants.PRODUCT_TYPE.SLC,
+        'beamMode': asf.constants.BEAMMODE.IW,
+        'polarization': [asf.constants.POLARIZATION.VV, asf.constants.POLARIZATION.VV_VH],
         'flightDirection': frame.flight_direction,
         'relativeOrbit': frame.path,
         'intersectsWith': frame.wkt,
-        'output': 'jsonlite2',
     }
 
     if date:
-        params['start'] = date.isoformat()
-        params['end'] = (date + datetime.timedelta(days=1)).isoformat()
+        date_as_datetime = datetime.datetime(year=date.year, month=date.month, day=date.day)
+        search_params['start'] = date_as_datetime - datetime.timedelta(minutes=5)
+        search_params['end'] = date_as_datetime + datetime.timedelta(days=1, minutes=5)
 
-    response = requests.get(SEARCH_API_URL, params=params)
-    response.raise_for_status()
-    return response.json()['results']
+    results = asf.search(**search_params)
+
+    return results
 
 
-def _get_stack_dates_from(granules: list[dict]) -> list[datetime.date]:
+def _get_stack_dates_from(granules: asf.ASFSearchResults) -> list[datetime.date]:
     groups = defaultdict(list)
     for granule in granules:
-        group_id = granule['d'] + '_' + granule['o'][0]
+        props = granule.properties
+        group_id = f'{props["platform"]}_{props["orbit"]}'
         groups[group_id].append(granule)
 
     def _get_date_from_group(group: str) -> datetime.date:
-        return min(datetime.datetime.fromisoformat(granule['st']).date() for granule in group)
+        return min(datetime.datetime.fromisoformat(granule.properties['startTime']).date() for granule in group)
 
     granule_dates = [_get_date_from_group(group) for group in groups.values()]
     return granule_dates
@@ -126,18 +125,15 @@ def get_slcs(frame_id: int, date: datetime.date) -> list[str]:
 def does_product_exist(frame_id: int, reference_date: datetime.date, secondary_date: datetime.date) -> bool:
     date_buffer = datetime.timedelta(days=1)
     params = {
-        'dataset': 'ARIA S1 GUNW',
+        'dataset': asf.constants.DATASET.ARIA_S1_GUNW,
         'frame': frame_id,
-        'output': 'jsonlite2',
-        'start': (reference_date - date_buffer).isoformat(),
-        'end': (reference_date + date_buffer).isoformat(),
+        'start': (reference_date - date_buffer),
+        'end': (reference_date + date_buffer),
     }
 
-    response = requests.get(SEARCH_API_URL, params=params)
-    response.raise_for_status()
-    granules = [result['gn'] for result in response.json()['results']]
+    results = asf.search(**params)
 
-    return any([_dates_match(g, reference_date, secondary_date) for g in granules])
+    return any([_dates_match(result.properties['sceneName'], reference_date, secondary_date) for result in results])
 
 
 def _dates_match(granule: str, reference: datetime.date, secondary: datetime.date) -> bool:
